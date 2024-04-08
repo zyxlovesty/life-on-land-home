@@ -94,6 +94,15 @@ header
     font-size:4.1em;
     color:#112434;
 }
+#text2
+{
+    position: absolute;
+    top: 30%;
+    right:500px;
+    
+    font-size:4.1em;
+    color:#063f6e;
+}
 .sec
 {
     position: relative;
@@ -125,4 +134,5 @@ header
     border-radius: 30px;
     
   }
+
 

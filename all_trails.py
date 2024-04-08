@@ -3,41 +3,41 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc
 from dash.dependencies import Input, Output, State
 import dash_leaflet as dl
-
+ 
 import xml.etree.ElementTree as ET
 from shapely.geometry import LineString
 import pandas as pd
 import base64
 import os
-
+ 
 external_stylesheets = [
     'https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700,800,900&display=swap',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css',
     '/assets/style.css'
 ]
-
+ 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True)
-
+ 
 df = pd.read_csv('data/50_trails.csv', encoding='utf-8')
-
+ 
 def load_trail_names():
     return [{'label': name, 'value': name} for name in df['name'].unique()]
-
+ 
 def gpx_to_points(gpx_path):
     tree = ET.parse(gpx_path)
     root = tree.getroot()
     namespaces = {'default': 'http://www.topografix.com/GPX/1/1'}
     route_points = [(float(pt.attrib['lat']), float(pt.attrib['lon'])) for pt in root.findall('.//default:trkpt', namespaces)]
     return LineString(route_points)
-
+ 
 def create_trail_card(trail_number, trail_name, duration, elevation_gain, distance):
     return dbc.Card(
         dbc.CardBody([
             html.H3(style={'display': 'inline'}, children=[
                 html.Span(f"{trail_number}. ", style={'font-weight': 'bold'}),  # Display the trail number
-                html.A(trail_name, href=f'/{trail_name.replace(" ", "-")}', 
+                html.A(trail_name, href=f'/{trail_name.replace(" ", "-")}',
                     style={'color': '#112434', 'text-decoration': 'none', 'margin-bottom': '8px'}),
-                html.A(html.I(className="fas fa-external-link-alt", 
+                html.A(html.I(className="fas fa-external-link-alt",
                               style={'color': '#112434', 'text-decoration': 'none', 'margin-bottom': '8px', 'margin-left':'8px', 'font-size': '13px'}),
                       href=f'/{trail_name.replace(" ", "-")}')
             ]),
@@ -51,13 +51,13 @@ def create_trail_card(trail_number, trail_name, duration, elevation_gain, distan
             ], style={'font-size': '14px', 'margin-bottom': '30px'})
         ])
     )
-    
-
+   
+ 
 def b64_image(img):
     with open(img, 'rb') as f:
         image = f.read()
     return 'data:image/png;base64,' + base64.b64encode(image).decode('utf-8')
-
+ 
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     dbc.Row([
@@ -72,7 +72,7 @@ app.layout = html.Div([
             ])
         )
     ]),
-    
+   
     html.Section(className='sec', children=[
         html.H2('Trails in Victoria'),
         html.H4('Explore the diverse trails of Victoria with our carefully curated selection.'),
@@ -98,7 +98,7 @@ app.layout = html.Div([
             }
         ),
         html.Div(id='trail-cards-row'),  # This is where the trail cards will be displayed
-    ], style={'padding-top': '20px', 'margin-left': '20px'}), 
+    ], style={'padding-top': '20px', 'margin-left': '20px'}),
     html.Div(id='trail-info'),
     dl.Map(
         id='trail-map',
@@ -106,25 +106,9 @@ app.layout = html.Div([
         style={'width': '70%', 'height': '500px', 'margin-top': '15px', 'margin-left': '200px', 'align': 'center', 'display': 'none'}  # Initially hide the trail-map
     ),
     html.Div(id='mountain-backgrounds')
-
+ 
 ])
-
-# @app.callback(
-#     Output('sec', 'style'),  # Adjust to output the style of the section directly
-#     [Input('url', 'pathname')]
-# )
-# def update_background_images(pathname):
-#     if pathname == '/' or pathname == '/all-trails':  # Display images only on "All Trails" page
-#         return {
-#             'background-image': 'url(/assets/monutain_01.png), url(/assets/monutain_03.png)',
-#             'background-position': 'top left, bottom right',  # Adjust positions as needed
-#             'background-repeat': 'no-repeat, no-repeat',
-#             'background-attachment': 'fixed, fixed',  # Keep the images fixed during scroll
-#             'background-size': 'cover, cover',  # Cover the respective areas with each image
-#         }
-#     else:
-#         return {}
-
+ 
 @app.callback(
     Output('mountain-backgrounds', 'children'),
     [Input('url', 'pathname')]
@@ -157,7 +141,7 @@ def update_background_images(pathname):
         ])
     else:
         return None
-
+ 
 @app.callback(
     Output('trail-search-dropdown', 'style'),
     [Input('url', 'pathname')]
@@ -175,7 +159,7 @@ def toggle_search_visibility(pathname):
                 }
     else:
         return {'display': 'none'}
-    
+   
 @app.callback(
     [Output('trail-cards-row', 'children'),
      Output('trail-info', 'children')],
@@ -189,7 +173,7 @@ def update_trail_info(pathname, search_input):
             filtered_trails = df
         else:
             filtered_trails = df[df['name'].str.contains(search_input, case=False)]
-
+ 
         cards = [
             dbc.Col(create_trail_card(index+1, row['name'], row['duration'], row['elevation_gain'], row['distance']), width=4)
             for index, row in filtered_trails.iterrows()
@@ -208,7 +192,7 @@ def update_trail_info(pathname, search_input):
         dist_mel = trail['distance_from_mel'].values[0]
         time_mel = trail['drive_from_mel'].values[0]
         loop = trail['loop'].values[0]
-    
+   
         return None, html.Div([
             dbc.Row([
                 dcc.Link(html.I(className="fas fa-arrow-left", style={'margin-right': '5px'}), href='/'),
@@ -217,7 +201,7 @@ def update_trail_info(pathname, search_input):
             dbc.Row(html.H2(trail_name, style={'color': '#112434', 'text-decoration': 'none', 'margin-bottom': '15px',
                                                'margin-left':'40px'})),
             dbc.Row([
-                dbc.Col(html.Img(src=b64_image(f"assets/{trail_name}.jpg"), 
+                dbc.Col(html.Img(src=b64_image(f"assets/{trail_name}.jpg"),
                                  style={'max-width': '100%', 'height': 'auto'}), width=4),
                 dbc.Col([
                     html.P(description, style={'margin-left': '30px', 'text-align': 'justify'}),
@@ -255,7 +239,7 @@ def update_trail_info(pathname, search_input):
                 zoom=12)
     ])
     ])
-        
+       
 @app.callback(
     [Output('trail-layer', 'children'), Output('trail-map', 'center')],
     [Input('url', 'pathname')],
@@ -273,7 +257,7 @@ def update_map(pathname):
     positions = list(line_string.coords)
     features = [dl.Polyline(positions=positions, color='blue')]
     return features, centroid
-
+ 
 @app.callback(
     [Output('image-layer', 'children')],
     [Input('url', 'pathname')],
@@ -282,7 +266,7 @@ def update_map(pathname):
 def display_image_marker(pathname, zoom):
     if zoom is None:
         zoom = 10
-
+ 
     markers = []
     if not pathname or pathname == '/':
         return [dash.no_update]
@@ -290,10 +274,10 @@ def display_image_marker(pathname, zoom):
     splitname = [x.split('-') for x in pathname.split('---')]
     trail_name = ' - '.join([' '.join(x) for x in splitname])
     gpx_path = os.path.join('data/trails', f'{trail_name}.gpx')
-    
+   
     if not os.path.exists(gpx_path):
         return [dash.no_update]
-
+ 
     trail_points = gpx_to_points(gpx_path).coords
     start_marker = dl.Marker(
         position=trail_points[0],
@@ -315,8 +299,8 @@ def display_image_marker(pathname, zoom):
     )
     markers.extend([start_marker, finish_marker])
     return [markers]
-
-
-
+ 
+ 
+ 
 if __name__ == '__main__':
     app.run_server(debug=True)

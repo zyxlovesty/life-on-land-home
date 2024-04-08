@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, ClientsideFunction
 import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
@@ -9,9 +9,32 @@ import os
 import pandas as pd
 from geopy.distance import geodesic
 import base64
+ 
+external_stylesheets = [
+    'https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700,800,900&display=swap',
+    '/assets/style.css',
+    'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.1/gsap.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.1/ScrollTrigger.min.js',
+    dbc.themes.BOOTSTRAP
+]
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True,
+                external_scripts=[
+                    'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.1/gsap.min.js',
+                    'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.1/ScrollTrigger.min.js'
+                ])
+ 
+app.clientside_callback(
+    ClientsideFunction(namespace='clientside', function_name='trigger_gsap_animation'),
+    Output('dummy-output', 'children'),
+    [Input('dummy-input', 'children')]
+)
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
-
+app.clientside_callback(
+    ClientsideFunction(namespace='clientside', function_name='scroll_to_map'),
+    Output('dummy-output-2', 'children'),  # Dummy output, we don't actually need to update anything in the layout
+    [Input('trail-search-dropdown', 'value')]
+)
+ 
 # Dummy DataFrame for storing uploads - for demonstration purposes
 df_uploads = pd.DataFrame(columns=['timestamp', 'latitude', 'longitude', 'image_bytes'])
 # Adding a dummy entry
@@ -25,68 +48,96 @@ df_uploads = pd.DataFrame({
         'https://via.placeholder.com/150/008000/FFFFFF'
     ]
 })
-
+ 
 def gpx_to_points(gpx_path):
     tree = ET.parse(gpx_path)
     root = tree.getroot()
     namespaces = {'default': 'http://www.topografix.com/GPX/1/1'}
     route_points = [(float(pt.attrib['lat']), float(pt.attrib['lon'])) for pt in root.findall('.//default:trkpt', namespaces)]
     return LineString(route_points)
-
+ 
 def load_trail_names():
     df = pd.read_csv('data/50_trails.csv', encoding='utf-8')
     return [{'label': name, 'value': name} for name in df['name'].unique()]
-
+ 
 def is_within_distance(point, trail_points, max_distance=500):
     return any(geodesic(point, trail_point).meters <= max_distance for trail_point in trail_points)
-
+ 
 def b64_image(img):
     with open(img, 'rb') as f:
         image = f.read()
     return 'data:image/png;base64,' + base64.b64encode(image).decode('utf-8')
-
-
+ 
+ 
 app.layout = dbc.Container(fluid=True, children=[
-    dbc.Row(justify="center", className="mb-3", children=[
-        dbc.Col([
-            dcc.Dropdown(
+    dbc.Row([
+        dbc.Col(
+            html.Header([
+                html.A('InSync', href='#', className='logo'),
+                html.Ul([
+                    html.Li(dcc.Link('Home', href='/')),
+                    html.Li(dcc.Link('My Trail', href='/my-trail', className='active')),
+                    html.Li(dcc.Link('All Trails', href='/all-trails')),
+                ], className='navigation')
+            ])
+        )
+    ]),
+    html.Section(className='parallax', children=[
+        html.H2('Start your Trail', id='text2'),
+        dcc.Dropdown(
                 id='trail-search-dropdown',
                 options=load_trail_names(),
                 searchable=True,
                 placeholder='Search for trails...',
-            )
-        ], width=12, lg=6, style={'margin-bottom': '20px', 'margin-top': '20px'})
+                style={
+                    'width': '55%',  # Adjusts the width to fit its container
+                    'margin': '0 auto',  # Centers the dropdown if its container allows
+                    'borderRadius': '20px',  # Matches the CSS for rounded corners
+                    'fontFamily': '"Poppins", sans-serif',  # Ensure the font matches
+                    'fontSize': '16px'  # Slightly larger font for readability
+                }
+            ),
+        html.Img(src='/assets/monutain_01.png', id='m1'),
+        html.Img(src='/assets/trees_02.png', id='t2', style={'top': '16px'}),
+        html.Img(src='/assets/monutain_02.png', id='m2'),
+        html.Img(src='/assets/trees_01.png', id='t1'),
+        # html.Img(src='/assets/man.png', id='man'),
+        html.Img(src='/assets/plants.png', id='plants')
     ]),
-    dbc.Row(justify="center", className="mb-3", children=[
+    html.Div(id='scroll-trigger', style={'display': 'none'}),
+    html.Div(id='dummy-input', style={'display': 'none'}),
+    html.Div(id='dummy-output', style={'display': 'none'}),
+    html.Div(id='dummy-output-2', style={'display': 'none'}),
+    dbc.Row([
         dbc.Col([
             dl.Map(
                 id='trail-map',
                 children=[dl.TileLayer(), dl.LayerGroup(id='trail-layer'), dl.LayerGroup(id='image-layer')],
-                style={'width': '100%', 'height': '500px'},
+                style={'width': '100%', 'height': '800px'},
                 center=(-37.8136, 144.9631),
                 zoom=12
             )
-        ], width=12, lg=10)
-    ]),
-    dbc.Row(justify="center", className="mb-3", children=[
+        ], width=15, lg=7),  # Map takes up 6 columns on large screens, full width on smaller ones
+        
         dbc.Col([
-            dbc.Button('Found something interesting? Upload your find!', id='find-btn', n_clicks=0, 
-                       color="primary", className="me-1", 
-                       style={'margin-left': '550px'}),
-            html.Div(id='location-div', style={'display': 'none'}),
-        dcc.Upload(
-            id='upload-image',
-            children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
-            style={
-                'width': '100%', 'height': '60px', 'lineHeight': '60px',
-                'borderWidth': '1px', 'borderStyle': 'dashed', 'borderRadius': '5px',
-                'textAlign': 'center', 'margin': '10px auto', 'display': 'none'
-            },
-            accept='.png,.jpg,.jpeg,.heic',  # Limit file types
-            multiple=True
-            )
-
-        ])
+            dbc.Row(justify="center", className="h-100 align-items-center", children=[
+                dbc.Col([
+                    dbc.Button('Found something interesting? Upload your find!', id='find-btn', n_clicks=0,
+                               color="primary", className="mb-3", style={'display': 'block', 'width': '100%','marginLeft': '100px'}),
+                    dcc.Upload(
+                        id='upload-image',
+                        children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
+                        style={
+                            'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                            'borderWidth': '1px', 'borderStyle': 'dashed', 'borderRadius': '5px',
+                            'textAlign': 'center', 'margin': '0 auto', 'display': 'block','marginLeft': '100px'
+                        },
+                        accept='.png,.jpg,.jpeg,.heic',
+                        multiple=True
+                    )
+                ], width=10)  # Adjust width as needed for aesthetic preferences
+            ])
+        ], width=9, lg=5, className="d-flex"),  # Make the column a flex container
     ]),
     dbc.Modal([
         dbc.ModalHeader(dbc.ModalTitle("Action Required")),
@@ -104,12 +155,13 @@ app.layout = dbc.Container(fluid=True, children=[
         dbc.ModalFooter(
             dbc.Button("Close", id="close-too-far-modal", className="ms-auto", n_clicks=0)
         )
-    ], id="too-far-modal", is_open=False),  # Changed ID here
+    ], id="too-far-modal", is_open=False),
     html.Div(id='upload-status', style={'display': 'none'})
-
-
+ 
+ 
 ])
-
+ 
+ 
 @app.callback(
     Output('modal', 'is_open'),
     [Input('find-btn', 'n_clicks'), Input('close-modal', 'n_clicks')],
@@ -130,7 +182,7 @@ def toggle_trail_modal(find_clicks, close_clicks, selected_trail, is_open):
             # If the close button on the modal was clicked, close the modal
             return False
     return is_open
-
+ 
 @app.callback(
     Output('location-div', 'children'),
     [Input('find-btn', 'n_clicks')],
@@ -140,7 +192,7 @@ def display_geolocation(n, selected_trail):
     if n > 0 and selected_trail:
         return dcc.Geolocation(id='geo')
     return []
-
+ 
 @app.callback(
     Output('location-error-modal', 'is_open'),
     [Input('close-location-modal', 'n_clicks'), Input('geo', 'position_error')],
@@ -150,13 +202,13 @@ def display_geolocation(n, selected_trail):
 def toggle_location_error_modal(close_clicks, position_error, is_open):
     ctx = dash.callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    
+   
     if triggered_id == 'close-location-modal':
         return False
     elif triggered_id == 'geo' and position_error:
         return True
     return is_open
-
+ 
 @app.callback(
     Output('too-far-modal', 'is_open'),
     [Input('close-too-far-modal', 'n_clicks'),
@@ -178,13 +230,12 @@ def handle_too_far_modal(close_clicks, position, selected_trail, is_open):
         gpx_path = os.path.join('data/trails', f'{selected_trail}.gpx')
         trail_points = gpx_to_points(gpx_path).coords
         user_position = (position['lat'], position['lon'])
-        # Assuming you have a function to check if the user is within a certain distance to the trail
         if is_within_distance(user_position, trail_points):
             return False
         else:
             return True
     return is_open
-
+ 
 @app.callback(
     [Output('find-btn', 'style'), Output('upload-image', 'style')],
     [Input('geo', 'local_date'), Input('geo', 'position_error'), Input('close-too-far-modal', 'n_clicks')],
@@ -194,10 +245,8 @@ def update_button_visibility(local_date, position_error, close_clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
         raise PreventUpdate
-
+ 
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    # When the user has successfully shared location and not too far
     if triggered_id == 'geo' and local_date and not position_error:
         return {'display': 'none'}, {
             'width': '100%',
@@ -209,13 +258,13 @@ def update_button_visibility(local_date, position_error, close_clicks):
             'textAlign': 'center',
             'display': 'block'
         }
-
+ 
     # When the user is too far and closes the modal, or if there's a position error
     if triggered_id in ('close-too-far-modal', 'geo') and (position_error or close_clicks > 0):
         return {'display': 'block', 'marginLeft': '550px'}, {'display': 'none'}
-
+ 
     return {'display': 'block', 'marginLeft': '550px'}, {'display': 'none'}
-
+ 
 @app.callback(
     Output('upload-status', 'children'),  # An Output to indicate the upload status
     [Input('upload-image', 'contents'),  # Contents from the upload component
@@ -233,7 +282,6 @@ def handle_upload(contents, local_date, position, position_error):
         return "Failed to get geolocation data."
     content_type, content_string = contents[0].split(',')  # Taking the first uploaded file
     image_bytes = content_string  # base64 encoded string of the first image
-    
     latitude = position['lat']
     longitude = position['lon']
     global df_uploads
@@ -245,7 +293,7 @@ def handle_upload(contents, local_date, position, position_error):
     }, ignore_index=True)
     print(df_uploads)
     return "Image uploaded successfully!"
-
+ 
 @app.callback(
     [Output('image-layer', 'children')],
     [Input('upload-image', 'contents'),
@@ -294,12 +342,9 @@ def display_image_marker(contents, trail, zoom):
                 }
             )
             markers.append(image_marker)
-
+ 
     return [markers]
-
-
-
-
+ 
 @app.callback(
     [Output('trail-layer', 'children'), Output('trail-map', 'center')],
     [Input('trail-search-dropdown', 'value')]
@@ -313,7 +358,7 @@ def update_map(trail_name):
     positions = list(line_string.coords)
     features = [dl.Polyline(positions=positions, color='blue')]
     return features, centroid
-
-
+ 
+ 
 if __name__ == '__main__':
     app.run_server(debug=True)
